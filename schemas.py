@@ -6,5 +6,8 @@ class IngestData(BaseModel):
     datasetId: str
 
 class RetrieveData(BaseModel):
-    query: str
+    prompt: str
+    datasetId: str
+
+class DeleteData(BaseModel):
     datasetId: str
