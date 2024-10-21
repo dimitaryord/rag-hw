@@ -17,9 +17,28 @@ from models import Document
 from utils import pdf_splitter, txt_splitter, md_splitter, json_splitter
 import aiohttp
 from embeddings import create_embedding, insert_chunks_to_documents
+import os
 
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+
+from fastapi import HTTPException, Request
+
+async def verify_token(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid or missing Authorization header")
+    token = auth_header.split(" ")[1]
+    if token != ACCESS_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid access token")
 
 app = FastAPI()
+
+@app.middleware("http")
+async def authentication_middleware(request: Request, call_next):
+    if request.url.path not in ["/docs", "/openapi.json"]:
+        await verify_token(request)
+    response = await call_next(request)
+    return response
 
 @app.post("/ingest")
 async def ingest(request: IngestData, db: AsyncSession = Depends(get_db)):
