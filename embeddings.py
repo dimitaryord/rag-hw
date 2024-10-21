@@ -35,6 +35,7 @@ async def insert_chunks_to_documents(chunks, dataset_id, db: AsyncSession):
     batch_size = 100
     for i in range(0, len(chunks), batch_size):
         batch = chunks[i:i+batch_size]
+        print(batch)
         documents = [
             Document(
                 dataset_id=dataset_id,
