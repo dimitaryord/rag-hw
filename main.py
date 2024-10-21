@@ -10,7 +10,7 @@ from fastapi import FastAPI, Depends
 from fastapi.responses import JSONResponse
 from schemas import IngestData, RetrieveData, DeleteData
 from io import BytesIO
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from db import get_db
 from models import Document
@@ -140,10 +140,8 @@ async def retrieve(request: RetrieveData, db: AsyncSession = Depends(get_db)):
 
 @app.delete("/delete")
 async def delete(request: DeleteData, db: AsyncSession = Depends(get_db)):
-    await db.execute(
-        delete(Document)
-        .where(Document.dataset_id == request.datasetId)
-    )
+    delete_stmt = delete(Document).where(Document.dataset_id == request.datasetId)
+    await db.execute(delete_stmt)
     await db.commit()
 
     return JSONResponse(
