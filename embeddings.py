@@ -1,4 +1,5 @@
-from config import Session, Document
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from models import Document
 import numpy as np
 import os
 
@@ -30,17 +31,18 @@ async def create_embedding(text: str):
 	return embedding_array
 
 
-async def insert_chunks_to_documents(chunks: list[str], dataset_id: str):
-	async with Session() as session:
-		tasks = []
-		for chunk in chunks:
-			tasks.append(asyncio.create_task(process_chunks(chunk, dataset_id, session)))
-			
-		await asyncio.gather(*tasks)
-		await session.commit()
-			
-
-async def process_chunks(chunk: str, dataset_id: str, session):
-	embedding = await create_embedding(chunk)
-	document = Document(chunk=chunk, embedding=embedding, dataset_id=dataset_id)
-	session.add(document)
+async def insert_chunks_to_documents(chunks, dataset_id, db: AsyncSession):
+    batch_size = 100
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i+batch_size]
+        documents = [
+            Document(
+                dataset_id=dataset_id,
+                chunk=chunk,
+                embedding=await create_embedding(chunk)
+            )
+            for chunk in batch
+        ]
+        db.add_all(documents)
+        await db.flush()
+    await db.commit()

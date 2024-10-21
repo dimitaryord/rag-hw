@@ -2,21 +2,27 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from PyPDF2 import PdfReader
-from fastapi import FastAPI
+from docx import Document as DocxDocument
+import json
+import pandas as pd
+import mammoth
+from fastapi import FastAPI, Depends
 from fastapi.responses import JSONResponse
 from schemas import IngestData, RetrieveData, DeleteData
 from io import BytesIO
 from sqlalchemy import select
-from config import Session, Document
-from utils import pdf_splitter, txt_splitter
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_db
+from models import Document
+from utils import pdf_splitter, txt_splitter, md_splitter, json_splitter
 import aiohttp
 from embeddings import create_embedding, insert_chunks_to_documents
 
+
 app = FastAPI()
 
-
 @app.post("/ingest")
-async def ingest(request: IngestData):
+async def ingest(request: IngestData, db: AsyncSession = Depends(get_db)):
     ingested_files = 0
 
     for file in request.files:
@@ -37,21 +43,37 @@ async def ingest(request: IngestData):
                     page = pdf_reader.pages[page_num]
                     text = page.extract_text()
                     file_text += text + "\n"
+            case "docx":
+                docx_reader = DocxDocument(buffer)
+                for paragraph in docx_reader.paragraphs:
+                    file_text += paragraph.text + "\n"
+            case "doc":
+                result = mammoth.convert_to_markdown(buffer)
+                file_text = result.value
+            case "csv":
+                df = pd.read_csv(buffer)
+                file_text = df.to_string()
+            case "json":
+                json_data = json.load(buffer)
+                file_text = json.dumps(json_data, indent=2)
             case _:
                 file_text = buffer.read().decode("utf-8")
 
         match file_extension:
             case "pdf":
                 chunks = pdf_splitter.split_text(file_text)
+            case "docx":
+                chunks = pdf_splitter.split_text(file_text)
+            case "doc":
+                chunks = md_splitter.split_text(file_text)
+            case "json":
+                chunks = json_splitter.split_text(file_text)
             case _:
                 chunks = txt_splitter.split_text(file_text)
 
         ingested_files += 1
 
-        for i, chunk in enumerate(chunks):
-            print(f"Chunk {i+1}:\n{chunk}\n")
-
-        await insert_chunks_to_documents(chunks, request.datasetId)
+        await insert_chunks_to_documents(chunks, request.datasetId, db)
         
 
     return JSONResponse(
@@ -65,46 +87,45 @@ async def ingest(request: IngestData):
 
 
 @app.post("/retrieve")
-async def retrieve(request: RetrieveData):
-    embedding = create_embedding(request.query)
+async def retrieve(request: RetrieveData, db: AsyncSession = Depends(get_db)):
+    embedding = await create_embedding(request.prompt)
+    print(f"Embedding: {embedding}")
 
-    async with Session() as session:
-        k = 3
-        similarity_threshold = 0.7
-        query = (
-            await session.scalars(
-                select(Document)
-                .where(Document.dataset_id == request.datasetId)
-                .order_by(Document.embedding.cosine_distance(embedding.tolist()) < similarity_threshold)
-                .limit(k)
-            )
-        )
+    k = 3
+    query = (
+        select(Document)
+        .where(Document.dataset_id == request.datasetId)
+        .order_by(Document.embedding.cosine_distance(embedding.tolist()))
+        .limit(k)
+    )
 
-        serialized_results = [
-            {
-                "chunk": document.chunk,
-            }
-            for document in query
-        ]
+    results = await db.execute(query)
+    documents = results.scalars().all()
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "prompt": request.prompt,
-                "datasetId": request.datasetId,
-                "results": serialized_results
-            }
-        )
+    serialized_results = [
+        {
+            "chunk": document.chunk,
+        }
+        for document in documents
+    ]
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "prompt": request.prompt,
+            "datasetId": request.datasetId,
+            "results": serialized_results
+        }
+    )
 
 
 @app.delete("/delete")
-async def delete(request: DeleteData):
-    async with Session() as session:
-        await session.execute(
-            delete(Document)
-            .where(Document.dataset_id == request.datasetId)
-        )
-        await session.commit()
+async def delete(request: DeleteData, db: AsyncSession = Depends(get_db)):
+    await db.execute(
+        delete(Document)
+        .where(Document.dataset_id == request.datasetId)
+    )
+    await db.commit()
 
     return JSONResponse(
         status_code=200,
