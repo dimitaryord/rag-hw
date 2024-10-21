@@ -11,7 +11,7 @@ The API is deployed and accessible at:
 All endpoints require authentication using a Bearer token. Include the following header in your requests:
 
 ```
-Authorization: Bearer Yd8xP3qL9mRtKfNjWvZcAeHgUbXsE7oC5iF2nG6uT4yM1hQwD0pB
+Authorization: Bearer token
 ```
 
 ## Endpoints
@@ -63,7 +63,7 @@ Here are cURL commands to test the API:
 
 ```bash
 curl -X POST https://rag-hw.onrender.com/ingest \
--H "Authorization: Bearer Yd8xP3qL9mRtKfNjWvZcAeHgUbXsE7oC5iF2nG6uT4yM1hQwD0pB" \
+-H "Authorization: Bearer token" \
 -H "Content-Type: application/json" \
 -d '{"files": ["https://example.com/file1.pdf"], "datasetId": "test_dataset"}'
 ```
@@ -72,7 +72,7 @@ curl -X POST https://rag-hw.onrender.com/ingest \
 
 ```bash
 curl -X POST https://rag-hw.onrender.com/retrieve \
--H "Authorization: Bearer Yd8xP3qL9mRtKfNjWvZcAeHgUbXsE7oC5iF2nG6uT4yM1hQwD0pB" \
+-H "Authorization: Bearer token" \
 -H "Content-Type: application/json" \
 -d '{"prompt": "What is RAG?", "datasetId": "test_dataset"}'
 ```
@@ -81,7 +81,7 @@ curl -X POST https://rag-hw.onrender.com/retrieve \
 
 ```bash
 curl -X DELETE https://rag-hw.onrender.com/delete \
--H "Authorization: Bearer Yd8xP3qL9mRtKfNjWvZcAeHgUbXsE7oC5iF2nG6uT4yM1hQwD0pB" \
+-H "Authorization: Bearer token" \
 -H "Content-Type: application/json" \
 -d '{"datasetId": "test_dataset"}'
 ```
