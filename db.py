@@ -4,7 +4,13 @@ import os
 
 connection_string = os.environ.get("DATABASE_URL")
 
-engine = create_async_engine(connection_string, echo=True)
+engine = create_async_engine(url=connection_string, pool_pre_ping=True, pool_size=5, pool_recycle=300, echo=True, connect_args={
+    "sslmode": "require",
+    "keepalives": 1,
+    "keepalives_idle": 30,
+    "keepalives_interval": 10,
+    "keepalives_count": 5
+})
 Session = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 async def get_db():
